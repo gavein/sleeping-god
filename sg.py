@@ -81,15 +81,36 @@ class GameObject:
 
 
 class Planet(GameObject):
-    def __init__(self, pos_x, pos_y, char, label, color, blocks, minerals, water, population, terralike=False):
-        GameObject.__init__(self, pos_x, pos_y, char, label, color, blocks)
+    def __init__(
+            self,
+            pos_x,
+            pos_y,
+            char,
+            label,
+            color,
+            blocks,
+            minerals,
+            water,
+            population,
+            terralike=False):
+
+        GameObject.__init__(
+                self,
+                pos_x,
+                pos_y,
+                char,
+                label,
+                color,
+                blocks)
+
         self.minerals = minerals
         self.water = water
         self.population = population
         self.terralike = terralike
 
     def info(self):
-        return (self.minerals,
+        return (
+                self.minerals,
                 self.water,
                 self.population,
                 self.terralike)
@@ -155,8 +176,8 @@ def place_objects():
     num_objects = libtcod.random_get_int(0, 0, MAX_OBJECT_IN_SPACE)
 
     for obj in xrange(num_objects):
-        x = libtcod.random_get_int(0, 0, MAP_WIDTH)
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT)
+        x = libtcod.random_get_int(0, 0, MAP_WIDTH-1)
+        y = libtcod.random_get_int(0, 0, MAP_HEIGHT-1)
         if not is_blocked(x, y):
             dice = libtcod.random_get_int(0, 0, 100)
             if dice < 80:
@@ -206,7 +227,7 @@ def make_map():
             x = systemstar_x + apsis
         else:
             x = systemstar_x - apsis
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT)
+        y = libtcod.random_get_int(0, 0, MAP_HEIGHT-1)
 
         if x >= MAP_WIDTH or x <= 0:
             break
