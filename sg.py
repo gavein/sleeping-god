@@ -28,7 +28,11 @@ MAX_WATER = 10000
 # FOV parameters.
 FOV_ALGO = libtcod.FOV_BASIC
 FOV_LIGHT = True
-FOV_RADIUS = 10
+FOV_RADIUS = 40
+
+#
+CARGO_WATER = "cargo_water"
+CARGO_MINERALS = "cargo_minerals"
 
 # Game states.
 EXIT = "exit"
@@ -58,10 +62,6 @@ class GameObject:
         self.color = color
         self.blocks = blocks
 
-    def move(self, dx, dy):
-        if not is_blocked(self.pos_x+dx, self.pos_y+dy):
-            self.pos_x += dx
-            self.pos_y += dy
 
     def draw(self):
         if libtcod.map_is_in_fov(fov_map, self.pos_x, self.pos_y):
@@ -80,40 +80,56 @@ class GameObject:
                 self.blocks)
 
 
+class Vessel(GameObject):
+    def __init__(
+            self, pos_x, pos_y, char, label, color, blocks,
+            cargo={}):
+        GameObject.__init__(
+                self, pos_x, pos_y, char,
+                label, color, blocks)
+        self.cargo = cargo
+        self.cargo_keys = [CARGO_MINERALS, CARGO_WATER]
+        for key in self.cargo_keys:
+            if not self.cargo.has_key(key):
+                self.cargo[key] = 0
+    
+    def move(self, dx, dy):
+        if not is_blocked(self.pos_x+dx, self.pos_y+dy):
+            self.pos_x += dx
+            self.pos_y += dy
+
+    def transfer_resources_from(self, target):
+        minerals = target.minerals
+        water = target.water
+        self.cargo[CARGO_MINERALS] += minerals
+        self.cargo[CARGO_WATER] += water
+        target.minerals = 0
+        target.water = 0
+
+    def cargo_info(self, key):
+        if self.cargo.has_key(key):
+            return self.cargo[key]
+
+
 class Planet(GameObject):
     def __init__(
-            self,
-            pos_x,
-            pos_y,
-            char,
-            label,
-            color,
-            blocks,
-            minerals,
-            water,
-            population,
-            terralike=False):
+            self, pos_x, pos_y, char, label, color, blocks,
+            minerals, water, terralike=False, human_population=0):
 
         GameObject.__init__(
-                self,
-                pos_x,
-                pos_y,
-                char,
-                label,
-                color,
-                blocks)
-
+                self, pos_x, pos_y, char,
+                label, color, blocks)
         self.minerals = minerals
         self.water = water
-        self.population = population
         self.terralike = terralike
+        self.human_population = human_population
 
     def info(self):
         return (
                 self.minerals,
                 self.water,
-                self.population,
-                self.terralike)
+                self.terralike,
+                self.human_population)
 
 
 class Tile:
@@ -139,8 +155,11 @@ def spacevessel_move_or_attack(dx, dy):
             break
 
     if target is not None:
-        print "There is %s." % target.label
-        print target.info()
+        print "====>>> There is %s." % target.label
+        if isinstance(target, Planet):
+            print "On planet:\nMinerals: %s\nWater: %s\nTerraformed: %s\nHuman population: %s" % target.info()
+            spacevessel.transfer_resources_from(target)
+            print "Now on planet:\nMinerals: %s\nWater: %s\nTerraformed: %s\nHuman population: % s" % target.info()
     else:
         spacevessel.move(dx, dy)
         fov_recompute = True
@@ -189,22 +208,18 @@ def place_objects():
 
 def set_planet_properties():
     minerals = libtcod.random_get_int(0, MIN_MINERALS, MAX_MINERALS)
-    population = libtcod.random_get_int(0, 0, MAX_POPULATION)
+    water = libtcod.random_get_int(0, MIN_WATER, MAX_WATER)
 
     terralike = libtcod.random_get_int(0, 0, 1)
-    if terralike == 1:
-        terralike = True
-    else:
-        terralike = False
     if terralike:
-        water = libtcod.random_get_int(0, MIN_WATER, MAX_WATER)
+        human_population = libtcod.random_get_int(0, 0, MAX_POPULATION)
     else:
-        water = 0
+        human_population = 0
 
     return (minerals,
             water,
-            population,
-            terralike)
+            terralike,
+            human_population)
 
 def make_map():
     global map
@@ -232,7 +247,7 @@ def make_map():
         if x >= MAP_WIDTH or x <= 0:
             break
 
-        m, w, p, t = set_planet_properties()
+        m, w, t, p = set_planet_properties()
 
         planet = Planet(pos_x=x,
                         pos_y=y,
@@ -242,8 +257,8 @@ def make_map():
                         blocks=True,
                         minerals=m,
                         water=w,
-                        population=p,
-                        terralike=t)
+                        terralike=t,
+                        human_population = p)
         #planets.append(planet)
         gameobjects.append(planet)
 
@@ -285,6 +300,12 @@ def render_all():
 
     libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 
+    libtcod.console_set_default_foreground(con, libtcod.gray)
+    libtcod.console_print_ex(0, 1, SCREEN_HEIGHT-3, libtcod.BKGND_NONE, libtcod.LEFT,
+            "Water: %s" % spacevessel.cargo_info(CARGO_WATER))
+    libtcod.console_print_ex(0, 1, SCREEN_HEIGHT-2, libtcod.BKGND_NONE, libtcod.LEFT,
+            "Minerals: %s" % spacevessel.cargo_info(CARGO_MINERALS))
+
 
 ################################
 # Initialization & Main Loop
@@ -295,12 +316,13 @@ libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, "Sleeping God Alpha", Fal
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-spacevessel = GameObject(pos_x=0,
+spacevessel = Vessel(pos_x=0,
                          pos_y=0,
                          char="@",
                          label="player",
                          color=libtcod.white,
-                         blocks=True)
+                         blocks=True,
+                         cargo={})
 gameobjects = [spacevessel]
 
 make_map()
