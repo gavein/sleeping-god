@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 
+import random
 import libtcodpy as libtcod
 
 
@@ -30,7 +31,7 @@ FOV_ALGO = libtcod.FOV_BASIC
 FOV_LIGHT = True
 FOV_RADIUS = 40
 
-#
+# Cargo variables.
 CARGO_WATER = "cargo_water"
 CARGO_MINERALS = "cargo_minerals"
 
@@ -61,7 +62,6 @@ class GameObject:
         self.label = label
         self.color = color
         self.blocks = blocks
-
 
     def draw(self):
         if libtcod.map_is_in_fov(fov_map, self.pos_x, self.pos_y):
@@ -192,13 +192,13 @@ def is_blocked(x, y):
     return False
 
 def place_objects():
-    num_objects = libtcod.random_get_int(0, 0, MAX_OBJECT_IN_SPACE)
+    num_objects = random.randint(0, MAX_OBJECT_IN_SPACE)
 
     for obj in xrange(num_objects):
-        x = libtcod.random_get_int(0, 0, MAP_WIDTH-1)
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT-1)
+        x = random.randint(0, MAP_WIDTH-1)
+        y = random.randint(0, MAP_HEIGHT-1)
         if not is_blocked(x, y):
-            dice = libtcod.random_get_int(0, 0, 100)
+            dice = random.randint(0, 100)
             if dice < 80:
                 spaceobject = GameObject(x, y, "v", "vessel", libtcod.desaturated_green, True)
             else:
@@ -207,12 +207,12 @@ def place_objects():
             gameobjects.append(spaceobject)
 
 def set_planet_properties():
-    minerals = libtcod.random_get_int(0, MIN_MINERALS, MAX_MINERALS)
-    water = libtcod.random_get_int(0, MIN_WATER, MAX_WATER)
+    minerals = random.randint(MIN_MINERALS, MAX_MINERALS)
+    water = random.randint(MIN_WATER, MAX_WATER)
 
-    terralike = libtcod.random_get_int(0, 0, 1)
+    terralike = random.choice([True, False])
     if terralike:
-        human_population = libtcod.random_get_int(0, 0, MAX_POPULATION)
+        human_population = random.randint(0, MAX_POPULATION)
     else:
         human_population = 0
 
@@ -233,16 +233,16 @@ def make_map():
     libtcod.console_set_char_background(con, systemstar_x, systemstar_y, libtcod.yellow, libtcod.BKGND_SET)
 
     #planets = []
-    num_planetes = libtcod.random_get_int(0, MIN_PLANETES, MAX_PLANETES)
+    num_planetes = random.randint(MIN_PLANETES, MAX_PLANETES)
     apsis = 2
 
     for p in xrange(num_planetes):
-        direction = libtcod.random_get_int(0, 0, 1)
+        direction = random.randint(0, 1)
         if direction == 1:
             x = systemstar_x + apsis
         else:
             x = systemstar_x - apsis
-        y = libtcod.random_get_int(0, 0, MAP_HEIGHT-1)
+        y = random.randint(0, MAP_HEIGHT-1)
 
         if x >= MAP_WIDTH or x <= 0:
             break
@@ -316,13 +316,9 @@ libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, "Sleeping God Alpha", Fal
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 
-spacevessel = Vessel(pos_x=0,
-                         pos_y=0,
-                         char="@",
-                         label="player",
-                         color=libtcod.white,
-                         blocks=True,
-                         cargo={})
+spacevessel = Vessel(
+        pos_x=0, pos_y=0, char="@", label="player",
+        color=libtcod.white, blocks=True, cargo={})
 gameobjects = [spacevessel]
 
 make_map()
