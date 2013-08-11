@@ -3,16 +3,22 @@
 
 
 import random
+import textwrap
 import libtcodpy as libtcod
 
 
 # Actual size of the window.
-SCREEN_WIDTH = 105
-SCREEN_HEIGHT = 50
+SCREEN_WIDTH = 85
+SCREEN_HEIGHT = 58
 
 # Size of the map.
-MAP_WIDTH = 80
-MAP_HEIGHT = 43
+MAP_WIDTH = 63
+MAP_HEIGHT = 45
+
+# Message console.
+MSG_CONSOLE_WIDTH = MAP_WIDTH - 2
+MSG_CONSOLE_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT
+MSG_X = 2
 
 # How many planets in system. At least one.
 MIN_PLANETES = 1
@@ -82,10 +88,10 @@ class GameObject:
     def draw(self):
         if libtcod.map_is_in_fov(fov_map, self.pos_x, self.pos_y):
             libtcod.console_set_default_foreground(con, self.color)
-            libtcod.console_put_char(con, self.pos_x, self.pos_y, self.char, libtcod.BKGND_NONE)
+            libtcod.console_print(con, self.pos_x, self.pos_y, self.char)
 
     def clear(self):
-        libtcod.console_put_char(con, self.pos_x, self.pos_y, " ", libtcod.BKGND_NONE)
+        libtcod.console_print(con, self.pos_x, self.pos_y, " ")
 
     def info(self):
         return (
@@ -98,7 +104,7 @@ class GameObject:
 
 
 class Vessel(GameObject):
-    SOLAR_SAIL = "solar sail"
+    SOLAR_SAIL = u"фотонный парус"
     def __init__(
                  self,
                  pos_x,
@@ -229,11 +235,10 @@ def spacevessel_move_or_attack(dx, dy):
             break
 
     if target is not None:
-        print "====>>> There is %s." % target.label
+        message(u"Перед тобой %s." % target.label, libtcod.grey)
         if isinstance(target, Planet):
-            print "On planet:\nMinerals: %s\nWater: %s\nTerraformed: %s\nHuman population: %s" % target.info()
+            message(u"Ты получил %s единиц минералов и %s единиц воды. Planet %s. На планете %s людей." % target.info(), libtcod.lime)
             spacevessel.transfer_resources_from(target)
-            print "Now on planet:\nMinerals: %s\nWater: %s\nTerraformed: %s\nHuman population: % s" % target.info()
     else:
         spacevessel.move(dx, dy)
         fov_recompute = True
@@ -274,9 +279,9 @@ def place_objects():
         if not is_blocked(x, y):
             dice = random.randint(0, 100)
             if dice < 80:
-                spaceobject = GameObject(x, y, "v", "vessel", libtcod.desaturated_green, True)
+                spaceobject = GameObject(x, y, u"v", u"судно", libtcod.desaturated_green, True)
             else:
-                spaceobject = GameObject(x, y, "s", "station", libtcod.darker_green, True)
+                spaceobject = GameObject(x, y, u"s", u"станция", libtcod.darker_green, True)
             map[x][y].block_sight = True
             gameobjects.append(spaceobject)
 
@@ -303,7 +308,7 @@ def make_map():
         for x in xrange(MAP_WIDTH) ]
 
     map[systemstar_x][systemstar_y].blocked = True
-    map[systemstar_x][systemstar_y].block_sight = False
+    map[systemstar_x][systemstar_y].block_sight = True
     libtcod.console_set_char_background(con, systemstar_x, systemstar_y, libtcod.yellow, libtcod.BKGND_SET)
 
     #planets = []
@@ -325,8 +330,8 @@ def make_map():
 
         planet = Planet(pos_x=x,
                         pos_y=y,
-                        char="p",
-                        label="planet",
+                        char=u"p",
+                        label=u"планета",
                         color=libtcod.black,
                         blocks=True,
                         minerals=m,
@@ -345,32 +350,37 @@ def make_map():
 
 def display_spacevessel_info(console, foreground_col=libtcod.grey):
     libtcod.console_set_default_foreground(console, libtcod.darker_amber)
-    libtcod.console_print_ex(console, 1, 1, libtcod.BKGND_NONE, libtcod.LEFT,
-            "  -- Hull --")
-    libtcod.console_print_ex(console, 1, 2, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Wear      : %s/%s" % (spacevessel.wear, spacevessel.hull))
-    libtcod.console_print_ex(console, 1, 3, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Resistance: %s" % spacevessel.wear_resistance)
-    libtcod.console_print_ex(console, 1, 4, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Propulsion: %s" % spacevessel.propulsion)
+    libtcod.console_print(console, 1, 1, u"  -- Судно --")
+    libtcod.console_print(console, 1, 2, u"Износ      : %s/%s" % (spacevessel.wear, spacevessel.hull))
+    libtcod.console_print(console, 1, 3,
+            u"Стойкость: %s" % spacevessel.wear_resistance)
+    libtcod.console_print(console, 1, 4,
+            u"Двигатель: %s" % spacevessel.propulsion)
 
     libtcod.console_set_default_foreground(console, libtcod.grey)
-    libtcod.console_print_ex(console, 1, 6, libtcod.BKGND_NONE, libtcod.LEFT,
-            "  -- Cargo --")
-    libtcod.console_print_ex(console, 1, 7, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Water     : %s" % spacevessel.cargo_info(CARGO_WATER))
-    libtcod.console_print_ex(console, 1, 8, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Minerals  : %s" % spacevessel.cargo_info(CARGO_MINERALS))
+    libtcod.console_print(console, 1, 6,
+            u"  -- Трюмы --")
+    libtcod.console_print(console, 1, 7,
+            u"Вода     : %s" % spacevessel.cargo_info(CARGO_WATER))
+    libtcod.console_print(console, 1, 8,
+            u"Минералы  : %s" % spacevessel.cargo_info(CARGO_MINERALS))
     
     libtcod.console_set_default_foreground(console, libtcod.darker_lime)
-    libtcod.console_print_ex(console, 1, 10, libtcod.BKGND_NONE, libtcod.LEFT,
-            "  -- Human --")
-    libtcod.console_print_ex(console, 1, 11, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Life: %s/%s" % (player.life_cur, player.life_max))
-    libtcod.console_print_ex(console, 1, 12, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Intelligence: %s" % player.intelligence)
-    libtcod.console_print_ex(console, 1, 13, libtcod.BKGND_NONE, libtcod.LEFT,
-            "Charisma: %s" % player.charisma)
+    libtcod.console_print(console, 1, 10,
+            u"  -- Человек --")
+    libtcod.console_print(console, 1, 11,
+            u"Жизнь: %s/%s" % (player.life_cur, player.life_max))
+    libtcod.console_print(console, 1, 12,
+            u"Ум: %s" % player.intelligence)
+    libtcod.console_print(console, 1, 13,
+            u"Харизма: %s" % player.charisma)
+
+def message(new_msg, color=libtcod.white):
+    msg_lines = textwrap.wrap(new_msg, MSG_CONSOLE_WIDTH)
+    for msg_line in msg_lines:
+        if  len(game_msgs) == MSG_CONSOLE_HEIGHT - 1:
+            del game_msgs[0]
+        game_msgs.append((msg_line, color))
 
 def render_all():
     global fov_recompute
@@ -402,23 +412,36 @@ def render_all():
 
     libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 
+    libtcod.console_clear(cargo_info_console)
+    libtcod.console_clear(msg_console)
+
     display_spacevessel_info(cargo_info_console)
+
+    y = 1
+    for (msg_line, color) in game_msgs:
+        libtcod.console_set_default_foreground(msg_console, color)
+        libtcod.console_print(msg_console, MSG_X, y,  msg_line)
+        y += 1
     libtcod.console_blit(cargo_info_console, 0, 0, SCREEN_WIDTH-MAP_WIDTH, MAP_HEIGHT, 0, MAP_WIDTH, 0)
+    libtcod.console_blit(msg_console, 0, 0, MAP_WIDTH, MSG_CONSOLE_HEIGHT, 0, 0, MAP_HEIGHT)
 
 
 ################################
 # Initialization & Main Loop
 ################################
 
-#libtcod.console_set_custom_font("dejavu10x10_gs_tc.png", libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_TCOD)
-libtcod.console_set_custom_font("terminal8x8_gs_ro.png", libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
+#libtcod.console_set_custom_font("terminal8x8_aa_ro.png", libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
+libtcod.console_set_custom_font("consolas_unicode_10x10.png", libtcod.FONT_LAYOUT_ASCII_INROW | libtcod.FONT_TYPE_GRAYSCALE, 32, 64)
+#libtcod.console_map_ascii_codes_to_font("А", 32, 0, 5)
+#libtcod.console_map_ascii_codes_to_font("а", 32, 0, 6)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, "Sleeping God Alpha", False)
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 cargo_info_console = libtcod.console_new(SCREEN_WIDTH-MAP_WIDTH, MAP_HEIGHT)
+msg_console = libtcod.console_new(MAP_WIDTH, MSG_CONSOLE_HEIGHT)
 
 spacevessel = Vessel(
-        pos_x=0, pos_y=0, char="@", label="player",
+        pos_x=0, pos_y=0, char=u"@", label=u"игрок",
         color=libtcod.white, blocks=True, cargo={},
         hull=300, wear_resistance=1)
 player = Player()
@@ -434,6 +457,9 @@ for y in xrange(MAP_HEIGHT):
 fov_recompute = True
 game_state = PLAYING
 player_action = None
+game_msgs = []
+
+message(u"Космос открывает свои просторы в игре Sleeping God.", libtcod.red)
 
 while not libtcod.console_is_window_closed():
 
