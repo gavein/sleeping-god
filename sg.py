@@ -20,6 +20,9 @@ MSG_CONSOLE_WIDTH = MAP_WIDTH - 2
 MSG_CONSOLE_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT
 MSG_X = 2
 
+# Planet menu.
+PLANET_MENU_WIDTH = 50
+
 # How many planets in system. At least one.
 MIN_PLANETES = 1
 MAX_PLANETES = 10
@@ -135,6 +138,7 @@ class Vessel(GameObject):
         self.wear = hull
         self.wear_resistance = wear_resistance
         self.propulsion = propulsion
+        self.abilities = []
     
     def move(self, dx, dy):
         if not is_blocked(self.pos_x+dx, self.pos_y+dy):
@@ -143,17 +147,45 @@ class Vessel(GameObject):
             turn_wear = WEAR_AT_TURN - self.wear_resistance
             self.wear -= turn_wear
 
-    def transfer_resources_from(self, target):
-        minerals = target.minerals
-        water = target.water
+    def increase_resources(self, minerals, water):
         self.cargo[CARGO_MINERALS] += minerals
         self.cargo[CARGO_WATER] += water
-        target.minerals = 0
-        target.water = 0
 
     def cargo_info(self, key):
         if self.cargo.has_key(key):
             return self.cargo[key]
+
+    def add_ability(self, ability):
+        self.abilities.append(ability)
+
+    def use_ability(self, ability, *args):
+        if ability in self.abilities:
+            ability.use(args)
+
+    def get_ability_name(self, ability):
+        return ability.name
+
+    def get_ability_description(self, ability):
+        return ability.description
+
+
+class Ability:
+    def __init__(
+                 self,
+                 name,
+                 description,
+                 ability_type,
+                 use_function=None, *args):
+        self.name = name
+        self.description = description
+        self.ability_type = ability_type
+        self.use_function = use_function
+
+    def use(self, *args):
+        if self.use_function is None:
+            message(u"%s не может быть использовано." % self.name)
+        else:
+            self.use_function(*args)
 
 
 class Planet(GameObject):
@@ -222,6 +254,24 @@ class Tile:
         self.block_sight = block_sight
 
 
+def transfer_resources(source, target):
+    # Transfer resources.
+    # Source is planet.
+    # Target is spacevessel.
+    minerals = source.minerals
+    water = source.water
+    message(u"Ты получил %s единиц минералов и %s единиц воды. Пригодность планеты для жизни: %s. Человеческое население: %s душ." % source.info())
+    target.increase_resources(minerals, water)
+    source.minerals = 0
+    source.water = 0
+
+resource_transfer_ability = Ability(name=u"Извлечение ресурсов",
+                                    description=u"",
+                                    ability_type=0,
+                                    use_function=transfer_resources)
+
+
+
 def spacevessel_move_or_attack(dx, dy):
     global fov_recompute
 
@@ -235,17 +285,16 @@ def spacevessel_move_or_attack(dx, dy):
             break
 
     if target is not None:
-        message(u"Перед тобой %s." % target.label, libtcod.grey)
         if isinstance(target, Planet):
-            message(u"Ты получил %s единиц минералов и %s единиц воды. Planet %s. На планете %s людей." % target.info(), libtcod.lime)
-            spacevessel.transfer_resources_from(target)
+            planet_menu(u"Ты вышел на орбиту %s. Что сделать?" % target.label, target)
     else:
         spacevessel.move(dx, dy)
         fov_recompute = True
 
 
 def handle_keys():
-    key = libtcod.console_wait_for_keypress(True)
+    global key
+    #key = libtcod.console_wait_for_keypress(True)
 
     if key.vk == libtcod.KEY_ESCAPE:
         return "exit"
@@ -348,6 +397,49 @@ def make_map():
 
     place_objects()
 
+def choice_menu(header, options, width):
+    if len(options) > 26: raise ValueError(u"Cannot have a menu with more than 26 options.")
+
+    header_hight = libtcod.console_get_height_rect(con, 0, 0, width, SCREEN_HEIGHT, header)
+    height = len(options) + header_hight
+
+    menu_console = libtcod.console_new(width, height)
+
+    libtcod.console_set_default_foreground(menu_console, libtcod.white)
+    libtcod.console_print_rect_ex(menu_console, 0, 0, width, height, libtcod.BKGND_NONE, libtcod.LEFT, header)
+
+    # Print options.
+    y = header_hight
+    letter_index = ord(u"a")
+    for option_text in options:
+        text = "(%s) %s" % (chr(letter_index), option_text)
+        libtcod.console_print(menu_console, 0, y, text)
+        y += 1
+        letter_index += 1
+
+    x = SCREEN_WIDTH / 2 - width / 2
+    y = SCREEN_HEIGHT / 2 - height / 2
+    libtcod.console_blit(menu_console, 0, 0, width, height, 0, x, y, 1.0, 0.7)
+
+    libtcod.console_flush()
+    key = libtcod.console_wait_for_keypress(True)
+
+    index = key.c - ord(u"a")
+    if index >= 0 and index < len(options):
+        return index
+    return None
+
+def planet_menu(header, target_planet):
+    abilities = spacevessel.abilities
+    if len(abilities) == 0:
+        abilities_name_list = [u"Ты ничего не можешь сделать."]
+    else:
+        abilities_name_list = [a.name for a in abilities]
+    index = choice_menu(header, abilities_name_list, PLANET_MENU_WIDTH)
+    if index is None:
+        return None
+    return abilities[index].use(target_planet, spacevessel)
+
 def display_spacevessel_info(console, foreground_col=libtcod.grey):
     libtcod.console_set_default_foreground(console, libtcod.darker_amber)
     libtcod.console_print(console, 1, 1, u"  -- Судно --")
@@ -447,6 +539,7 @@ spacevessel = Vessel(
 player = Player()
 gameobjects = [spacevessel]
 
+spacevessel.add_ability(resource_transfer_ability)
 make_map()
 
 fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
@@ -461,8 +554,12 @@ game_msgs = []
 
 message(u"Космос открывает свои просторы в игре Sleeping God.", libtcod.red)
 
+mouse = libtcod.Mouse()
+key = libtcod.Key()
+
 while not libtcod.console_is_window_closed():
 
+    libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
     render_all()
 
     libtcod.console_flush()
@@ -474,3 +571,6 @@ while not libtcod.console_is_window_closed():
     player_action = handle_keys()
     if player_action == EXIT:
         break
+
+    if game_state == PLAYING and player_action != "didnt-take-turn":
+        pass
