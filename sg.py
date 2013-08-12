@@ -6,252 +6,25 @@ import random
 import textwrap
 import libtcodpy as libtcod
 
+from Constants import *
+from SleepingGodObjects.GameObjects import GameObject
+from SleepingGodObjects.Vessel import Vessel, PlayerVessel
+from SleepingGodObjects.Planet import Planet
+from SleepingGodObjects.Player import Player
+from SleepingGodObjects.Tile import Tile
 
-# Actual size of the window.
-SCREEN_WIDTH = 85
-SCREEN_HEIGHT = 58
+from SleepingGodEngine.Ability import Ability, AutoAbility
 
-# Size of the map.
-MAP_WIDTH = 63
-MAP_HEIGHT = 45
-
-# Message console.
-MSG_CONSOLE_WIDTH = MAP_WIDTH - 2
-MSG_CONSOLE_HEIGHT = SCREEN_HEIGHT - MAP_HEIGHT
-MSG_X = 2
-
-# Planet menu.
-PLANET_MENU_WIDTH = 50
-
-# How many planets in system. At least one.
-MIN_PLANETES = 1
-MAX_PLANETES = 10
-MAX_OBJECT_IN_SPACE = 20
-
-# Planet resources.
-MIN_MINERALS = 10
-MAX_MINERALS = 200
-MAX_POPULATION = 1000
-MIN_WATER = 100
-MAX_WATER = 10000
-
-# FOV parameters.
-FOV_ALGO = libtcod.FOV_BASIC
-FOV_LIGHT = True
-FOV_RADIUS = 40
-
-# Cargo variables.
-CARGO_WATER = "cargo_water"
-CARGO_MINERALS = "cargo_minerals"
-
-WEAR_AT_TURN = 3
-
-# Game states.
-EXIT = "exit"
-PLAYING = "playing"
-
-
-# 20 frame-per-second maximum.
-LIMIT_FPS = 20
-
-# Colors.
-SPACE_DARK_COLOR = libtcod.Color(0, 0, 66)
-SPACE_LIGHT_COLOR = libtcod.Color(0, 0, 204)
-PLANET_DARK_COLOR = libtcod.Color(0, 99, 99)
-PLANET_LIGHT_COLOR = libtcod.Color(0, 99, 204)
 
 # System star coordinates. Always at center.
 systemstar_x = MAP_WIDTH / 2
 systemstar_y = MAP_HEIGHT / 2
 
 
-class GameObject:
-
-    '''
-    General game object.
-    Represents object by a character on screen.
-    '''
-
-    def __init__(
-                 self,
-                 pos_x,
-                 pos_y,
-                 char,
-                 label,
-                 color,
-                 blocks=False):
-
-        self.pos_x = pos_x
-        self.pos_y = pos_y
-        self.char = char
-        self.label = label
-        self.color = color
-        self.blocks = blocks
-
-    def draw(self):
-        if libtcod.map_is_in_fov(fov_map, self.pos_x, self.pos_y):
-            libtcod.console_set_default_foreground(con, self.color)
-            libtcod.console_print(con, self.pos_x, self.pos_y, self.char)
-
-    def clear(self):
-        libtcod.console_print(con, self.pos_x, self.pos_y, " ")
-
-    def info(self):
-        return (
-                self.pos_x,
-                self.pos_y,
-                self.char,
-                self.label,
-                self.color,
-                self.blocks)
 
 
-class Vessel(GameObject):
-    SOLAR_SAIL = u"фотонный парус"
-    def __init__(
-                 self,
-                 pos_x,
-                 pos_y,
-                 char,
-                 label,
-                 color,
-                 blocks,
-                 cargo={},
-                 hull=0,
-                 wear_resistance=0,
-                 propulsion=SOLAR_SAIL):
-
-        GameObject.__init__(
-                            self,
-                            pos_x,
-                            pos_y,
-                            char,
-                            label,
-                            color,
-                            blocks)
-        self.cargo = cargo
-        self.cargo_keys = [CARGO_MINERALS, CARGO_WATER]
-        for key in self.cargo_keys:
-            if not self.cargo.has_key(key):
-                self.cargo[key] = 0
-        self.hull = hull
-        self.wear = hull
-        self.wear_resistance = wear_resistance
-        self.propulsion = propulsion
-        self.abilities = []
-    
-    def move(self, dx, dy):
-        if not is_blocked(self.pos_x+dx, self.pos_y+dy):
-            self.pos_x += dx
-            self.pos_y += dy
-            turn_wear = WEAR_AT_TURN - self.wear_resistance
-            self.wear -= turn_wear
-
-    def increase_resources(self, minerals, water):
-        self.cargo[CARGO_MINERALS] += minerals
-        self.cargo[CARGO_WATER] += water
-
-    def cargo_info(self, key):
-        if self.cargo.has_key(key):
-            return self.cargo[key]
-
-    def add_ability(self, ability):
-        self.abilities.append(ability)
-
-    def use_ability(self, ability, *args):
-        if ability in self.abilities:
-            ability.use(args)
-
-    def get_ability_name(self, ability):
-        return ability.name
-
-    def get_ability_description(self, ability):
-        return ability.description
 
 
-class Ability:
-    def __init__(
-                 self,
-                 name,
-                 description,
-                 ability_type,
-                 use_function=None, *args):
-        self.name = name
-        self.description = description
-        self.ability_type = ability_type
-        self.use_function = use_function
-
-    def use(self, *args):
-        if self.use_function is None:
-            message(u"%s не может быть использовано." % self.name)
-        else:
-            self.use_function(*args)
-
-
-class Planet(GameObject):
-    def __init__(
-                 self,
-                 pos_x,
-                 pos_y,
-                 char,
-                 label,
-                 color,
-                 blocks,
-                 minerals,
-                 water,
-                 terralike=False,
-                 human_population=0):
-
-        GameObject.__init__(
-                            self,
-                            pos_x,
-                            pos_y,
-                            char,
-                            label,
-                            color,
-                            blocks)
-        self.minerals = minerals
-        self.water = water
-        self.terralike = terralike
-        self.human_population = human_population
-
-    def info(self):
-        return (
-                self.minerals,
-                self.water,
-                self.terralike,
-                self.human_population)
-
-
-class Player:
-    def __init__(
-                 self,
-                 life_max=50,
-                 intelligence=10,
-                 charisma=0):
-
-        self.life_max = life_max
-        self.life_cur = life_max - 10
-        self.intelligence = intelligence
-        self.charisma = charisma
-
-
-class Tile:
-
-    '''
-    A tile of the map and its properties.
-    '''
-
-    def __init__(
-                 self,
-                 blocked,
-                 block_sight=None):
-
-        self.blocked = blocked
-        self.explored = False
-        if block_sight is None:
-            block_sight = blocked
-        self.block_sight = block_sight
 
 
 def transfer_resources(source, target):
@@ -265,10 +38,16 @@ def transfer_resources(source, target):
     source.minerals = 0
     source.water = 0
 
+def landing_and_repair_vessel():
+    spacevessel.wear = spacevessel.hull
+    message(u"Ты приземлился на планете и починил своё судно.", libtcod.dark_chartreuse)
+
 resource_transfer_ability = Ability(name=u"Извлечение ресурсов",
                                     description=u"",
-                                    ability_type=0,
                                     use_function=transfer_resources)
+repair_ability = AutoAbility(name=u"Призмелиться и чинить судно.",
+                         description=u"",
+                         use_function=landing_and_repair_vessel)
 
 
 
@@ -287,6 +66,8 @@ def spacevessel_move_or_attack(dx, dy):
     if target is not None:
         if isinstance(target, Planet):
             planet_menu(u"Ты вышел на орбиту %s. Что сделать?" % target.label, target)
+        else:
+            message(u"Перед тобою %s." % target.label, libtcod.darker_amber)
     else:
         spacevessel.move(dx, dy)
         fov_recompute = True
@@ -300,13 +81,13 @@ def handle_keys():
         return "exit"
 
     if game_state == PLAYING:
-        if libtcod.console_is_key_pressed(libtcod.KEY_UP):
+        if key.vk == libtcod.KEY_UP:
             spacevessel_move_or_attack(0, -1)
-        elif libtcod.console_is_key_pressed(libtcod.KEY_DOWN):
+        elif key.vk == libtcod.KEY_DOWN:
             spacevessel_move_or_attack(0, 1)
-        elif libtcod.console_is_key_pressed(libtcod.KEY_LEFT):
+        elif key.vk == libtcod.KEY_LEFT:
             spacevessel_move_or_attack(-1, 0)
-        elif libtcod.console_is_key_pressed(libtcod.KEY_RIGHT):
+        elif key.vk == libtcod.KEY_RIGHT:
             spacevessel_move_or_attack(1, 0)
         else:
             return "didnt-take-turn"
@@ -328,7 +109,7 @@ def place_objects():
         if not is_blocked(x, y):
             dice = random.randint(0, 100)
             if dice < 80:
-                spaceobject = GameObject(x, y, u"v", u"судно", libtcod.desaturated_green, True)
+                spaceobject = Vessel(x, y, u"v", u"судно", libtcod.desaturated_green, True)
             else:
                 spaceobject = GameObject(x, y, u"s", u"станция", libtcod.darker_green, True)
             map[x][y].block_sight = True
@@ -440,32 +221,32 @@ def planet_menu(header, target_planet):
         return None
     return abilities[index].use(target_planet, spacevessel)
 
-def display_spacevessel_info(console, foreground_col=libtcod.grey):
-    libtcod.console_set_default_foreground(console, libtcod.darker_amber)
-    libtcod.console_print(console, 1, 1, u"  -- Судно --")
-    libtcod.console_print(console, 1, 2, u"Износ      : %s/%s" % (spacevessel.wear, spacevessel.hull))
-    libtcod.console_print(console, 1, 3,
-            u"Стойкость: %s" % spacevessel.wear_resistance)
-    libtcod.console_print(console, 1, 4,
-            u"Двигатель: %s" % spacevessel.propulsion)
+def get_spacevessel_info():
+    spacevessel_info = [
+        u" -- Судно -- ",
+        u"Износ: %s/%s" % (spacevessel.wear, spacevessel.hull),
+        u"Стойкость: %s" % spacevessel.wear_resistance,
+        u"Двигатель: %s" % spacevessel.propulsion,
+        u"Кислород: %s/%s" % (spacevessel.oxygen, spacevessel.oxygen_max),
+        u" ",
+        u" -- Трюмы -- ",
+        u"Вода: %s" % spacevessel.cargo_info(CARGO_WATER),
+        u"Минералы: %s" % spacevessel.cargo_info(CARGO_MINERALS),
+        u" ",
+        u" -- Человек -- ",
+        u"Жизнь: %s/%s" % (player.life_cur, player.life_max),
+        u"Ум: %s" % player.intelligence,
+        u"Харизма: %s" % player.charisma
+        ]
+    return spacevessel_info
 
-    libtcod.console_set_default_foreground(console, libtcod.grey)
-    libtcod.console_print(console, 1, 6,
-            u"  -- Трюмы --")
-    libtcod.console_print(console, 1, 7,
-            u"Вода     : %s" % spacevessel.cargo_info(CARGO_WATER))
-    libtcod.console_print(console, 1, 8,
-            u"Минералы  : %s" % spacevessel.cargo_info(CARGO_MINERALS))
-    
-    libtcod.console_set_default_foreground(console, libtcod.darker_lime)
-    libtcod.console_print(console, 1, 10,
-            u"  -- Человек --")
-    libtcod.console_print(console, 1, 11,
-            u"Жизнь: %s/%s" % (player.life_cur, player.life_max))
-    libtcod.console_print(console, 1, 12,
-            u"Ум: %s" % player.intelligence)
-    libtcod.console_print(console, 1, 13,
-            u"Харизма: %s" % player.charisma)
+
+def display_spacevessel_info(console, spacevessel_info, foreground_col=libtcod.grey):
+    libtcod.console_set_default_foreground(console, foreground_col)
+    y = 1
+    for each in spacevessel_info:
+        libtcod.console_print(console, 1, y, each)
+        y += 1
 
 def message(new_msg, color=libtcod.white):
     msg_lines = textwrap.wrap(new_msg, MSG_CONSOLE_WIDTH)
@@ -500,14 +281,14 @@ def render_all():
                     map[x][y].explored = True
 
     for gameobject in gameobjects:
-        gameobject.draw()
+        gameobject.draw(con, fov_map)
 
     libtcod.console_blit(con, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 0, 0, 0)
 
     libtcod.console_clear(cargo_info_console)
     libtcod.console_clear(msg_console)
 
-    display_spacevessel_info(cargo_info_console)
+    display_spacevessel_info(cargo_info_console, get_spacevessel_info())
 
     y = 1
     for (msg_line, color) in game_msgs:
@@ -522,24 +303,24 @@ def render_all():
 # Initialization & Main Loop
 ################################
 
-#libtcod.console_set_custom_font("terminal8x8_aa_ro.png", libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
 libtcod.console_set_custom_font("consolas_unicode_10x10.png", libtcod.FONT_LAYOUT_ASCII_INROW | libtcod.FONT_TYPE_GRAYSCALE, 32, 64)
-#libtcod.console_map_ascii_codes_to_font("А", 32, 0, 5)
-#libtcod.console_map_ascii_codes_to_font("а", 32, 0, 6)
 libtcod.console_init_root(SCREEN_WIDTH, SCREEN_HEIGHT, "Sleeping God Alpha", False)
 libtcod.sys_set_fps(LIMIT_FPS)
 con = libtcod.console_new(SCREEN_WIDTH, SCREEN_HEIGHT)
 cargo_info_console = libtcod.console_new(SCREEN_WIDTH-MAP_WIDTH, MAP_HEIGHT)
 msg_console = libtcod.console_new(MAP_WIDTH, MSG_CONSOLE_HEIGHT)
 
-spacevessel = Vessel(
+spacevessel = PlayerVessel(
         pos_x=0, pos_y=0, char=u"@", label=u"игрок",
         color=libtcod.white, blocks=True, cargo={},
+        oxygen=500,
         hull=300, wear_resistance=1)
 player = Player()
 gameobjects = [spacevessel]
 
 spacevessel.add_ability(resource_transfer_ability)
+spacevessel.add_ability(repair_ability)
+
 make_map()
 
 fov_map = libtcod.map_new(MAP_WIDTH, MAP_HEIGHT)
@@ -565,7 +346,7 @@ while not libtcod.console_is_window_closed():
     libtcod.console_flush()
 
     for gameobject in gameobjects:
-        gameobject.clear()
+        gameobject.clear(con)
 
 
     player_action = handle_keys()
