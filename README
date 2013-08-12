@@ -1,0 +1,8 @@
+Requires:
+* Python 2.7
+  (See http://python.org or your distro repository)
+
+* libtcod (a.k.a. "The Doryen Library")
+  (See http://doryen.eptalys.net/libtcod/ or your distro repository)
+
+Game is in development.
